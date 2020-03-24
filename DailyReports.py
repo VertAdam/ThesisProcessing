@@ -58,6 +58,7 @@ class DailyReport:
         self.wrist_report = {"Day Definition": "Calendar Date"}
         self.hr_report_sleep = {"Day Definition": "Sleep Onset"}
         self.wrist_report_sleep = {"Day Definition": "Sleep Onset"}
+
         self.sleep_report = {}
         self.sleep_report_sleep = {}
         self.period_lengths = {}
@@ -125,6 +126,68 @@ class DailyReport:
         # Pads with zeros due to lost epochs with averaging
         for i in range(4):
             self.roll_avg_hr.append(0)
+        ##################### ADAMS CODE STARTS ###############################################################
+        day_num_list = []
+
+        max_hr_list = []
+        max_hr_time_list = []
+        mean_hr_list = []
+        rest_hr_list = []
+
+        wrist_active_minutes_list = []
+        wrist_mvpa_minutes_list = []
+
+        sleep_minutes_list = []
+
+        period_length_list = []
+        for start, end, day_num in zip(self.day_indexes[:], self.day_indexes[1:], np.arange(1, len(self.day_indexes))):
+
+            day_num_list.append(day_num)
+
+            period_length_list.append(((end - start) / (60 / self.epoch_len) / 60))
+
+            # HR data: max, mean, resting
+            non_zero_hr = [i for i in self.hr[start:end] if i > 0]
+
+            if self.process_sleep:
+                awake_hr = [value for i, value in enumerate(self.hr[start:end])
+                            if self.sleep_status[start + i] == 0 and value > 0]
+            if not self.process_sleep:
+                awake_hr = non_zero_hr
+
+
+
+            max_hr_list.append(max(self.roll_avg_hr[start:end]))
+            max_hr_time_list.append(self.timestamps[self.roll_avg_hr[start:end].index(max(self.roll_avg_hr[start:end])) + start])
+            mean_hr_list.append(round(sum(non_zero_hr) / len(non_zero_hr), 1))
+            rest_hr_list.append(round(sum(sorted(awake_hr)[:self.n_resting_hrs])/self.n_resting_hrs, 1))
+
+            wrist_active_minutes_list.append(((end - start) - self.wrist_intensity[start:end].count(0)) / (60 / self.epoch_len))
+            wrist_mvpa_minutes_list.append((self.wrist_intensity[start:end].count(2) + self.wrist_intensity[start:end].count(3)) / (60 / self.epoch_len))
+
+            # Sleep report
+            if self.process_sleep:
+                sleep_minutes_list.append((end - start -self.sleep_status[start:end].count(0)) / (60 / self.epoch_len))
+
+            if not self.process_sleep:
+                sleep_minutes_list.append(0)
+
+
+        dataframe_dict = {"Max HR":max_hr_list,
+                          "Max HR Time":max_hr_time_list,
+                          "Mean HR":mean_hr_list,
+                          "Resting HR":rest_hr_list,
+                          "Wrist Active Minutes":wrist_active_minutes_list,
+                          "Wrist MVPA Minutes":wrist_mvpa_minutes_list,
+                          "Sleep Minutes":sleep_minutes_list,
+                          "Period Lengths":period_length_list}
+
+        activity_report_dataframe = pd.DataFrame(dataframe_dict,index=day_num_list)
+        print(activity_report_dataframe)
+
+
+
+        ##################### ADAMS CODE ENDS ###############################################################
 
         for start, end, day_num in zip(self.day_indexes[:], self.day_indexes[1:], np.arange(1, len(self.day_indexes))):
 
